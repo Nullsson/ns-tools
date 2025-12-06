@@ -20,13 +20,13 @@ internal class Program
     {
         var addressOption = new Option<string>("--address", "-a")
         {
-            Description = "Target address to test (base URL)"
+            Description = "Target address to test (base URL)",
         };
         addressOption.Required = true;
         
         var fileOption = new Option<FileInfo>("--file", "-f")
         {
-            Description = "Path to the wordlist file containing test candidates"
+            Description = "Path to the wordlist file containing test candidates",
         };
         fileOption.Required = true;
         
@@ -42,11 +42,18 @@ internal class Program
             DefaultValueFactory = _ => DefaultConcurrencyLimit
         };
         
+        var placeholderOption = new Option<string>("--placeholder", "-p")
+        {
+            Description = "Placeholder string to replace in URL",
+            DefaultValueFactory = _ => BruteForceConfig.DefaultPlaceholder
+        };
+        
         var rootCommand = new RootCommand("DVWA Brute Force Testing Tool");
         rootCommand.Options.Add(addressOption);
         rootCommand.Options.Add(fileOption);
         rootCommand.Options.Add(cookieOption);
         rootCommand.Options.Add(concurrencyOption);
+        rootCommand.Options.Add(placeholderOption);
         
         rootCommand.SetAction(async (parseResult, cancellationToken) =>
         {
@@ -54,12 +61,14 @@ internal class Program
             var wordlistFile = parseResult.GetValue(fileOption);
             var cookie = parseResult.GetValue(cookieOption);
             var concurrencyLimit = parseResult.GetValue(concurrencyOption);
+            var placeholder = parseResult.GetValue(placeholderOption);
 
             return await ExecuteBruteForceAsync(
                 targetAddress,
                 wordlistFile,
                 cookie,
                 concurrencyLimit,
+                placeholder,
                 cancellationToken);
         });
 
@@ -71,16 +80,26 @@ internal class Program
         FileInfo wordlistFile,
         string cookie,
         int concurrencyLimit,
+        string placeholder,
         CancellationToken cancellationToken)
     {
         try
         {
+            // Validate that the target address contains the placeholder
+            if (!targetAddress.Contains(placeholder))
+            {
+                Console.Error.WriteLine($"Error: Target address must contain the placeholder '{placeholder}'");
+                Console.Error.WriteLine($"Example: http://example.com/login?username=admin&password={placeholder}");
+                return ErrorExitCode;
+            }
+            
             var config = new BruteForceConfig
             {
                 TargetAddress = targetAddress,
                 WordlistPath = wordlistFile.FullName,
                 Cookie = cookie,
-                ConcurrencyLimit = concurrencyLimit
+                ConcurrencyLimit = concurrencyLimit,
+                Placeholder = placeholder
             };
 
             var engine = new BruteForceEngine(config);
@@ -126,11 +145,14 @@ internal class Program
 
 internal sealed class BruteForceConfig
 {
+    public const string DefaultPlaceholder = "{PASSWORD}";
+    
     public string TargetAddress { get; init; } = string.Empty;
     public string WordlistPath { get; init; } = string.Empty;
     public string Cookie { get; init; } = string.Empty;
     public int ConcurrencyLimit { get; init; } = 20;
     public string SuccessIndicator { get; init; } = "Welcome";
+    public string Placeholder { get; init; } = DefaultPlaceholder;
 }
 
 internal sealed class BruteForceResult
@@ -244,7 +266,7 @@ internal sealed class BruteForceEngine : IDisposable
 
     private async Task<bool> TestCandidateAsync(string candidate, CancellationToken cancellationToken)
     {
-        var url = $"{_config.TargetAddress}{candidate}&Login=Login";
+        var url = _config.TargetAddress.Replace(_config.Placeholder, candidate);
         var response = await _httpClient.GetAsync(url, cancellationToken);
         response.EnsureSuccessStatusCode();
 
