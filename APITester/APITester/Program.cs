@@ -42,10 +42,34 @@ internal class Program
 
     private static async Task<int> ExecuteApiTestAsync(FileInfo userlistPath, FileInfo routesPath)
     {
+        var OnlyTestSameInstance = true;
+        
         var users = await User.ReadUsersFromFile(userlistPath);
+        var targets = await TestTarget.ReadTargetsFromFile(routesPath);
+
+        foreach (var target in targets)
+        {
+            foreach (var user in users.Where(u => !OnlyTestSameInstance || u.Instance == target.Instance))
+            {
+                var tester = new APITester();
+                tester.SetBasicAuth(user);
+                
+                Console.WriteLine($"\nExecuting: {target.Instance} {target.HTTPMethod} {target.Route} | User: {user.Instance} {user.Role} {user.Username}");
+                
+                var response = await tester.ExecuteRequest(target);
+                
+                // You can also access individual properties
+                if (response.IsSuccess)
+                {
+                    Console.WriteLine($"✓ Request succeeded in {response.StatusCodeNumber}");
+                }
+                else
+                {
+                    Console.WriteLine($"✗ Request failed with status {response.StatusCodeNumber}");
+                }
+            }
+        }
         
-        
-        
-        return 1;
+        return 0;
     }
 }

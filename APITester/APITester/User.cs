@@ -18,6 +18,8 @@ public class User
     {
         var lines = await File.ReadAllLinesAsync(usersFile.FullName);
         return lines
+            .Where(l => !l.StartsWith("#"))
+            .Where(l => !string.IsNullOrEmpty(l))
             .Select(line => line.Split(" "))
             .Where(line => line.Length == 4)
             .Select(line =>
