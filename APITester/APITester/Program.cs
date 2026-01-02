@@ -1,4 +1,5 @@
 ﻿using System.CommandLine;
+using System.Reflection.Metadata;
 
 namespace APITester;
 
@@ -7,19 +8,20 @@ internal class Program
     static async Task Main(string[] args)
     {
         var rootCommand = BuildRootCommand();
+        await rootCommand.Parse(args).InvokeAsync();
     }
 
     private static RootCommand BuildRootCommand()
     {
-        var usersOption = new Option<string>("--user-list", "-u")
+        var usersOption = new Option<FileInfo>("--user-list", "-u")
         {
             Description = "Path to file with list of user credentials.",
             Required = true,
         };
 
-        var routesOption = new Option<string>("--routes", "-r")
+        var routesOption = new Option<FileInfo>("--targets", "-t")
         {
-            Description = "Paths to file with list of routes to test.",
+            Description = "Paths to file with list of targets to test.",
             Required = true,
         };
         
@@ -38,8 +40,12 @@ internal class Program
         return rootCommand;
     }
 
-    private static async Task<int> ExecuteApiTestAsync(string userlistPath, string routesPath)
+    private static async Task<int> ExecuteApiTestAsync(FileInfo userlistPath, FileInfo routesPath)
     {
+        var users = await User.ReadUsersFromFile(userlistPath);
+        
+        
+        
         return 1;
     }
 }
