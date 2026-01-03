@@ -1,5 +1,4 @@
 ﻿using System.CommandLine;
-using System.Reflection.Metadata;
 
 namespace APITester;
 
@@ -47,6 +46,9 @@ internal class Program
         var users = await User.ReadUsersFromFile(userlistPath);
         var targets = await TestTarget.ReadTargetsFromFile(routesPath);
 
+        using var writer = new StreamWriter(ReportTimestampTitle());
+        writer.WriteLine("Instance,User,Email,Route,Method,ResponseCode,Response,CURL String");
+        
         foreach (var target in targets)
         {
             foreach (var user in users.Where(u => !OnlyTestSameInstance || u.Instance == target.Instance))
@@ -67,9 +69,29 @@ internal class Program
                 {
                     Console.WriteLine($"✗ Request failed with status {response.StatusCodeNumber}");
                 }
+                
+                await writer.WriteLineAsync(
+                    $"{EscapeCsv(user.Instance)},{EscapeCsv(user.Role)},{EscapeCsv(user.Username)},{EscapeCsv(target.Route)},{EscapeCsv(target.HTTPMethod)},{response.StatusCodeNumber},{EscapeCsv(response.Content)},{EscapeCsv(await tester.GetCurlString())}");
             }
         }
         
+        Console.WriteLine("Application Completed all tests.");
         return 0;
+    }
+
+    private static string ReportTimestampTitle()
+    {
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var fileNme = $"APITestReport_{timestamp}.csv";
+        return fileNme;
+    }
+
+    static string EscapeCsv(string value)
+    {
+        if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+        {
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        }
+        return value;
     }
 }
