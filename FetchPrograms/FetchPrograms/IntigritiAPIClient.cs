@@ -57,7 +57,7 @@ public class IntigritiAPIClient : IDisposable
         Guid programId,
         CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetAsync($"external/researcher/v1/program/{programId}", cancellationToken);
+        var response = await _httpClient.GetAsync($"external/researcher/v1/programs/{programId}", cancellationToken);
         response.EnsureSuccessStatusCode();
         
         var content = await response.Content.ReadAsStringAsync(cancellationToken);

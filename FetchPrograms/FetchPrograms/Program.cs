@@ -38,7 +38,7 @@ internal class Program
 
                     var semaphore = new SemaphoreSlim(2);                 // max 2 concurrent
                     var rateDelay = TimeSpan.FromMilliseconds(1000);       // ≈ 1.6 req/sec (safe)
-
+                    
                     var tasks = programs.Records.Select(async p =>
                     {
                         await semaphore.WaitAsync();
@@ -52,12 +52,12 @@ internal class Program
                             semaphore.Release();
                         }
                     });
-
+                    
                     var results = await Task.WhenAll(tasks);
                     
                     var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     var fileName = $"IntigritiPrograms_{timestamp}.json";
-                    var programsJson = JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true });
+                    var programsJson = JsonSerializer.Serialize(results.Where(r => true), new JsonSerializerOptions { WriteIndented = true });
                     
                     File.WriteAllText(fileName, programsJson);
                 }
