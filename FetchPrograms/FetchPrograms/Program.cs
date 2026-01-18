@@ -1,4 +1,7 @@
 ﻿using System.CommandLine;
+using System.Text.Json;
+using System.Threading.RateLimiting;
+using FetchPrograms.Model.Intigriti;
 
 namespace FetchPrograms;
 
@@ -31,8 +34,32 @@ internal class Program
                 using var intigritiClient = new IntigritiAPIClient(intigritiAPIKey);
                 try
                 {
-                    var data = await intigritiClient.GetProgramsAsync();
-                    Console.WriteLine(data);
+                    var programs = await intigritiClient.GetProgramsAsync();
+
+                    var semaphore = new SemaphoreSlim(2);                 // max 2 concurrent
+                    var rateDelay = TimeSpan.FromMilliseconds(1000);       // ≈ 1.6 req/sec (safe)
+
+                    var tasks = programs.Records.Select(async p =>
+                    {
+                        await semaphore.WaitAsync();
+                        try
+                        {
+                            await Task.Delay(rateDelay);
+                            return await intigritiClient.GetProgramDetailAsync(p.Id);
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    });
+
+                    var results = await Task.WhenAll(tasks);
+                    
+                    var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    var fileName = $"IntigritiPrograms_{timestamp}.json";
+                    var programsJson = JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true });
+                    
+                    File.WriteAllText(fileName, programsJson);
                 }
                 catch (HttpRequestException e)
                 {
