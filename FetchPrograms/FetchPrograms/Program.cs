@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using FetchPrograms.Model;
 using FetchPrograms.Model.Intigriti;
 
 namespace FetchPrograms;
@@ -13,6 +14,30 @@ internal class Program
         await rootCommand.Parse(args).InvokeAsync();
     }
 
+    public static async Task<T> GetWithRetry<T>(Func<Task<T>> apiCall, Guid id)
+    {
+        var failCount = 0;
+        while (true)
+        {
+            if (failCount > 3)
+            {
+                Console.WriteLine($"Program with id: {id}. Is cursed so we move on.");
+                return default(T);
+            }
+
+            try
+            {
+                return await apiCall();
+            }
+            catch (HttpRequestException ex)
+            {
+                failCount++;
+                Console.WriteLine($"Temporary failure for {id}: {ex.Message}");
+                await Task.Delay(5000);
+            }
+        }
+    }
+    
     private static RootCommand BuildRootCommand()
     {
         var intigritiOption = new Option<string>("--intigriti-api-key")
@@ -35,25 +60,20 @@ internal class Program
                 try
                 {
                     var programs = await intigritiClient.GetProgramsAsync();
-
-                    var semaphore = new SemaphoreSlim(2);                 // max 2 concurrent
-                    var rateDelay = TimeSpan.FromMilliseconds(1000);       // ≈ 1.6 req/sec (safe)
                     
-                    var tasks = programs.Records.Select(async p =>
+                    var results = new List<IntigritiProgram>();
+                    
+                    foreach (var p in programs.Records)
                     {
-                        await semaphore.WaitAsync();
-                        try
-                        {
-                            await Task.Delay(rateDelay);
-                            return await intigritiClient.GetProgramDetailAsync(p.Id);
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    });
-                    
-                    var results = await Task.WhenAll(tasks);
+                        var intigritiProgram = new IntigritiProgram();
+                        intigritiProgram.Overview = p;
+                        
+                        intigritiProgram.Detail = await GetWithRetry(() => intigritiClient.GetProgramDetailAsync(p.Id), p.Id);
+                        await Task.Delay(5000);
+                        
+                        
+                        results.Add(intigritiProgram);
+                    }
                     
                     var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                     var fileName = $"IntigritiPrograms_{timestamp}.json";
